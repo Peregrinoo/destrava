@@ -1,24 +1,21 @@
-//
-//  ContentView.swift
-//  destrava
-//
-//  Created by peregrinoo on 04/11/26.
-//
-
+import SwiftData
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        TabView {
+            Tab("Editais", systemImage: "doc.text") {
+                InicioView()
+            }
+            Tab("Prazos", systemImage: "calendar") {
+                PrazosView()
+            }
         }
-        .padding()
     }
 }
 
 #Preview {
     ContentView()
+        .environment(EditalStore(servico: Ambiente.servico()))
+        .modelContainer(for: MarcaChecklist.self, inMemory: true)
 }
