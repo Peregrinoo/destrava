@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+build/
+
+# Node / NestJS (para a API, quando entrar)
+node_modules/
+dist/
+coverage/
+
+# Segredos
+.env
+.env.*
+!.env.example
