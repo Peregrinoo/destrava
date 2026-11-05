@@ -1,10 +1,10 @@
 import Foundation
 import Observation
 
-enum Carregamento<Valor> {
+enum SituacaoCarregamento: Equatable {
     case ocioso
     case carregando
-    case carregado(Valor)
+    case pronto
     case falhou(String)
 }
 
@@ -19,55 +19,98 @@ struct DataAgendada: Identifiable, Hashable {
 @MainActor
 @Observable
 final class EditalStore {
-    private(set) var estado: Carregamento<[Edital]> = .ocioso
-    private let servico: any EditalService
+    private(set) var editais: [Edital] = []
+    private(set) var situacao: SituacaoCarregamento = .ocioso
 
-    init(servico: any EditalService) {
+    @ObservationIgnored private let servico: any EditalService
+    @ObservationIgnored private let intervaloAcompanhamento: Duration
+    @ObservationIgnored private var carregamento: Task<Void, Never>?
+    @ObservationIgnored private var acompanhamento: Task<Void, Never>?
+
+    init(servico: any EditalService, intervaloAcompanhamento: Duration = .seconds(2)) {
         self.servico = servico
+        self.intervaloAcompanhamento = intervaloAcompanhamento
     }
 
-    var editais: [Edital] {
-        if case .carregado(let lista) = estado { return lista }
-        return []
+    func edital(id: String) -> Edital? {
+        editais.first { $0.id == id }
     }
 
     func carregar() async {
-        if editais.isEmpty { estado = .carregando }
-        do {
-            estado = .carregado(try await servico.listar())
-        } catch is CancellationError {
+        if let carregamento {
+            await carregamento.value
             return
-        } catch {
-            if editais.isEmpty { estado = .falhou(mensagem(de: error)) }
         }
+        let tarefa = Task { await buscarLista() }
+        carregamento = tarefa
+        await tarefa.value
+        carregamento = nil
+    }
+
+    func atualizar(id: String) async throws {
+        salvar(try await servico.buscar(id: id))
     }
 
     func enviar(pdf: URL) async throws -> Edital {
         let edital = try await servico.enviar(pdf: pdf)
-        salvarNaLista(edital)
+        salvar(edital)
         return edital
     }
 
     func enviar(link: URL) async throws -> Edital {
         let edital = try await servico.enviar(link: link)
-        salvarNaLista(edital)
+        salvar(edital)
         return edital
     }
 
-    func buscar(id: String) async throws -> Edital {
-        let edital = try await servico.buscar(id: id)
-        salvarNaLista(edital)
-        return edital
-    }
-
-    private func salvarNaLista(_ edital: Edital) {
-        var lista = editais
-        if let indice = lista.firstIndex(where: { $0.id == edital.id }) {
-            lista[indice] = edital
-        } else {
-            lista.insert(edital, at: 0)
+    private func buscarLista() async {
+        if editais.isEmpty { situacao = .carregando }
+        do {
+            editais = try await servico.listar()
+            situacao = .pronto
+            acompanharPendentes()
+        } catch is CancellationError {
+            if editais.isEmpty { situacao = .ocioso }
+        } catch {
+            situacao = editais.isEmpty ? .falhou(mensagem(de: error)) : .pronto
         }
-        estado = .carregado(lista)
+    }
+
+    private func salvar(_ edital: Edital) {
+        substituir(edital)
+        situacao = .pronto
+        acompanharPendentes()
+    }
+
+    private func substituir(_ edital: Edital) {
+        if let indice = editais.firstIndex(where: { $0.id == edital.id }) {
+            editais[indice] = edital
+        } else {
+            editais.insert(edital, at: 0)
+        }
+    }
+
+    private var pendentes: [String] {
+        editais.filter { $0.status == .processando }.map(\.id)
+    }
+
+    private func acompanharPendentes() {
+        guard acompanhamento == nil, !pendentes.isEmpty else { return }
+        acompanhamento = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, !self.pendentes.isEmpty else { break }
+                let intervalo = self.intervaloAcompanhamento
+                let ids = self.pendentes
+                try? await Task.sleep(for: intervalo)
+                for id in ids {
+                    if let edital = try? await self.servico.buscar(id: id) {
+                        self.substituir(edital)
+                    }
+                }
+            }
+            self?.acompanhamento = nil
+            self?.acompanharPendentes()
+        }
     }
 
     var proximoPrazo: (edital: Edital, passo: ProximoPasso, data: Date)? {
@@ -88,7 +131,7 @@ final class EditalStore {
             .flatMap { edital in
                 (edital.conteudo?.datas ?? []).compactMap { item -> DataAgendada? in
                     guard let data = item.data, data >= hoje else { return nil }
-                    return DataAgendada(id: edital.id + item.id, evento: item.evento, data: data,
+                    return DataAgendada(id: "\(edital.id)-\(item.id)", evento: item.evento, data: data,
                                         editalId: edital.id, editalTitulo: edital.titulo)
                 }
             }

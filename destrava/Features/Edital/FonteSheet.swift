@@ -66,6 +66,11 @@ struct FonteSheet: View {
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
                     .sensoryFeedback(.success, trigger: copiado)
+                    .task(id: copiado) {
+                        guard copiado else { return }
+                        try? await Task.sleep(for: .seconds(2))
+                        copiado = false
+                    }
                 }
                 .padding(20)
             }

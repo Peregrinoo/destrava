@@ -6,6 +6,7 @@ struct Edital: Codable, Identifiable, Hashable {
     let nomeArquivo: String?
     let criadoEm: Date?
     let conteudo: ConteudoEdital?
+    let erro: String?
 
     var titulo: String { conteudo?.documento.titulo ?? nomeArquivo ?? "Edital" }
     var tipo: TipoDocumento { conteudo?.documento.tipo ?? .outro }
@@ -79,20 +80,18 @@ struct ProximoPasso: Codable, Hashable {
 }
 
 struct DataImportante: Codable, Hashable, Identifiable {
+    let id: String
     let evento: String
     let data: Date?
     let hora: String?
     let fonte: Fonte?
-
-    var id: String { evento }
 }
 
 struct Alerta: Codable, Hashable, Identifiable {
+    let id: String
     let alerta: String
     let gravidade: Gravidade
     let fonte: Fonte?
-
-    var id: String { alerta }
 }
 
 enum Gravidade: String, Codable, Hashable {
@@ -116,12 +115,11 @@ struct Fonte: Codable, Hashable {
 }
 
 struct Secao: Codable, Hashable, Identifiable {
+    let id: String
     let pergunta: String
     let bloco: TipoBloco
     let icone: String?
     let itens: [ItemSecao]
-
-    var id: String { pergunta }
 }
 
 enum TipoBloco: String, Codable, Hashable {

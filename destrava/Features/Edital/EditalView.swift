@@ -5,68 +5,62 @@ struct EditalView: View {
     let id: String
 
     @Environment(EditalStore.self) private var store
-    @State private var estado: Carregamento<Edital> = .carregando
+    @State private var erro: String?
     @State private var fonteAberta: TrechoFonte?
 
     var body: some View {
         Group {
-            switch estado {
-            case .ocioso, .carregando:
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            case .falhou(let erro):
+            if let edital = store.edital(id: id) {
+                conteudo(de: edital)
+            } else if let erro {
                 ContentUnavailableView {
                     Label("Não deu para abrir", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(erro)
                 } actions: {
-                    Button("Tentar de novo") { Task { await acompanhar() } }
+                    Button("Tentar de novo") { Task { await abrir() } }
                         .buttonStyle(.borderedProminent)
                 }
-
-            case .carregado(let edital):
-                if edital.status == .processando {
-                    ProcessandoView(nomeArquivo: edital.nomeArquivo ?? "edital.pdf")
-                } else if let conteudo = edital.conteudo {
-                    DetalheEdital(edital: edital, conteudo: conteudo) { fonteAberta = $0 }
-                } else {
-                    ContentUnavailableView(
-                        "Não conseguimos ler este PDF",
-                        systemImage: "doc.questionmark",
-                        description: Text("Ele pode estar protegido ou ser uma imagem escaneada. Tente outro arquivo ou o link do PDF original.")
-                    )
-                }
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .animation(.smooth, value: store.edital(id: id)?.status)
         .background(Paleta.fundo)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $fonteAberta) { trecho in
             FonteSheet(trecho: trecho)
         }
-        .task(id: id) { await acompanhar() }
+        .task(id: id) { await abrir() }
     }
 
-    private func acompanhar() async {
-        if let local = store.editais.first(where: { $0.id == id }) {
-            estado = .carregado(local)
-        } else {
-            estado = .carregando
-        }
-
-        while !Task.isCancelled {
-            do {
-                let edital = try await store.buscar(id: id)
-                withAnimation(.smooth) { estado = .carregado(edital) }
-                guard edital.status == .processando else { return }
-                try await Task.sleep(for: .seconds(2))
-            } catch is CancellationError {
-                return
-            } catch {
-                if case .carregado = estado { return }
-                estado = .falhou(mensagem(de: error))
-                return
+    @ViewBuilder
+    private func conteudo(de edital: Edital) -> some View {
+        switch edital.status {
+        case .processando:
+            ProcessandoView(nomeArquivo: edital.nomeArquivo ?? "edital.pdf")
+        case .falhou:
+            ContentUnavailableView(
+                "Não conseguimos destravar este edital",
+                systemImage: "doc.questionmark",
+                description: Text(edital.erro ?? "Tente enviar o arquivo de novo ou use o link do PDF original.")
+            )
+        case .pronto:
+            if let conteudo = edital.conteudo {
+                DetalheEdital(edital: edital, conteudo: conteudo) { fonteAberta = $0 }
             }
+        }
+    }
+
+    private func abrir() async {
+        erro = nil
+        do {
+            try await store.atualizar(id: id)
+        } catch is CancellationError {
+            return
+        } catch {
+            if store.edital(id: id) == nil { erro = mensagem(de: error) }
         }
     }
 }
@@ -157,7 +151,7 @@ struct DetalheEdital: View {
                 .font(.caption.weight(.bold))
                 .tracking(0.8)
                 .foregroundStyle(.secondary)
-            ForEach(conteudo.destaques, id: \.self) { destaque in
+            ForEach(Array(conteudo.destaques.enumerated()), id: \.offset) { _, destaque in
                 Label {
                     Text(destaque).fixedSize(horizontal: false, vertical: true)
                 } icon: {
@@ -215,7 +209,7 @@ struct DetalheEdital: View {
             Label("O edital não diz", systemImage: "questionmark.circle")
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
-            ForEach(conteudo.naoInformado, id: \.self) { item in
+            ForEach(Array(conteudo.naoInformado.enumerated()), id: \.offset) { _, item in
                 Text(item).foregroundStyle(.secondary)
             }
             if let email = conteudo.contato?.email, let url = URL(string: "mailto:\(email)") {

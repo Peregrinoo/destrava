@@ -46,40 +46,42 @@ struct InicioView: View {
 
     @ViewBuilder
     private var lista: some View {
-        switch store.estado {
-        case .ocioso, .carregando:
-            ProgressView()
-                .frame(maxWidth: .infinity, minHeight: 200)
+        if store.editais.isEmpty {
+            switch store.situacao {
+            case .ocioso, .carregando:
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 200)
 
-        case .falhou(let erro):
-            ContentUnavailableView {
-                Label("Não deu para carregar", systemImage: "wifi.exclamationmark")
-            } description: {
-                Text(erro)
-            } actions: {
-                Button("Tentar de novo") { Task { await store.carregar() } }
-                    .buttonStyle(.borderedProminent)
+            case .falhou(let erro):
+                ContentUnavailableView {
+                    Label("Não deu para carregar", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(erro)
+                } actions: {
+                    Button("Tentar de novo") { Task { await store.carregar() } }
+                        .buttonStyle(.borderedProminent)
+                }
+
+            case .pronto:
+                ContentUnavailableView(
+                    "Nenhum edital ainda",
+                    systemImage: "doc.text.magnifyingglass",
+                    description: Text("Toque em + para destravar o seu primeiro edital.")
+                )
             }
-
-        case .carregado(let editais) where editais.isEmpty:
-            ContentUnavailableView(
-                "Nenhum edital ainda",
-                systemImage: "doc.text.magnifyingglass",
-                description: Text("Toque em + para destravar o seu primeiro edital.")
-            )
-
-        case .carregado(let editais):
+        } else {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Seus editais")
                     .font(.title3.bold())
                     .accessibilityAddTraits(.isHeader)
-                ForEach(editais) { edital in
+                ForEach(store.editais) { edital in
                     NavigationLink(value: edital.id) {
                         LinhaEdital(edital: edital)
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .animation(.smooth, value: store.editais)
         }
     }
 }
@@ -125,7 +127,7 @@ struct LinhaEdital: View {
         case .processando:
             return "Destravando…"
         case .falhou:
-            return "Não conseguimos ler este PDF"
+            return edital.erro ?? "Não conseguimos ler este PDF"
         case .pronto:
             var partes = [edital.conteudo?.documento.orgao, edital.tipo.rotulo].compactMap { $0 }
             if edital.conteudo?.exigeAcao == false { partes.append("só informa") }
