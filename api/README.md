@@ -7,7 +7,7 @@ LLM para extrair o que importa e confere cada informação no texto original.
 
 ```bash
 cd api
-cp .env.example .env   # coloque sua MISTRAL_API_KEY
+cp .env.example .env   # escolha os provedores e coloque as chaves
 npm install
 npm run start:dev
 ```
@@ -44,25 +44,74 @@ O processamento roda em segundo plano, com limite de editais simultâneos.
 
 ## Provedores de IA
 
-O domínio só conhece dois contratos, em `src/ia/ia.types.ts`:
+O domínio não conhece nenhum fornecedor. Ele depende só de dois contratos, em
+`src/ia/ia.types.ts`:
 
-- `OcrProvider.extrairTexto(pdf)` → páginas com texto
-- `LlmProvider.gerarJson({ instrucoes, entrada, schema })` → objeto JSON
+```ts
+abstract class OcrProvider {
+  abstract readonly nome: string;
+  abstract extrairTexto(pdf: Buffer): Promise<PaginaTexto[]>;
+}
 
-A implementação é escolhida pelo `.env` (`OCR_PROVIDER`, `LLM_PROVIDER`). Para
-adicionar outro fornecedor, crie a classe em `src/ia/<fornecedor>/` e registre
-em `src/ia/ia.module.ts`.
+abstract class LlmProvider {
+  abstract readonly nome: string;
+  abstract gerarJson(pedido: PedidoJson): Promise<unknown>;
+}
+```
 
-Hoje existe a implementação **Mistral**, chamando a API HTTP direto (sem SDK):
+O fornecedor de cada um é escolhido no `.env`, de forma independente: dá para
+usar o OCR de um e o LLM de outro.
 
-| Variável            | Padrão                 | Uso                                |
-| ------------------- | ---------------------- | ---------------------------------- |
-| `MISTRAL_API_KEY`   | —                      | Chave da API                       |
-| `MISTRAL_OCR_MODEL` | `mistral-ocr-latest`   | OCR do PDF                         |
-| `MISTRAL_LLM_MODEL` | `mistral-small-latest` | Extração estruturada (JSON Schema) |
-| `MISTRAL_BASE_URL`  | `https://api.mistral.ai/v1` | Útil para testes              |
+| Variável       | Obrigatória | O que escolhe                     |
+| -------------- | ----------- | --------------------------------- |
+| `OCR_PROVIDER` | sim         | Quem extrai o texto do PDF        |
+| `LLM_PROVIDER` | sim         | Quem transforma o texto em JSON   |
 
-Para gastar ainda menos, troque o LLM por `ministral-8b-latest`.
+Se a variável faltar ou citar um fornecedor desconhecido, a API não sobe e
+lista as opções disponíveis. Só o provedor escolhido é instanciado.
+
+### Plugando outro fornecedor
+
+1. Crie a classe em `src/ia/<fornecedor>/`, estendendo o contrato:
+
+   ```ts
+   @Injectable()
+   export class OpenAiLlmProvider extends LlmProvider {
+     readonly nome = 'openai';
+
+     constructor(config: ConfigService) {
+       super();
+     }
+
+     async gerarJson(pedido: PedidoJson): Promise<unknown> {
+     }
+   }
+   ```
+
+2. Registre em `src/ia/provedores.ts`:
+
+   ```ts
+   export const PROVEDORES_LLM = {
+     mistral: MistralLlmProvider,
+     openai: OpenAiLlmProvider,
+   };
+   ```
+
+3. No `.env`, use `LLM_PROVIDER=openai` e as variáveis que a sua classe ler.
+
+Erros do fornecedor devem ser lançados como `ErroProvedorIA`, para o app
+receber uma mensagem amigável.
+
+### Fornecedores disponíveis
+
+**Mistral** (`mistral`), via API HTTP, sem SDK:
+
+| Variável            | Padrão                      |
+| ------------------- | --------------------------- |
+| `MISTRAL_API_KEY`   | —                           |
+| `MISTRAL_OCR_MODEL` | `mistral-ocr-latest`        |
+| `MISTRAL_LLM_MODEL` | `mistral-small-latest`      |
+| `MISTRAL_BASE_URL`  | `https://api.mistral.ai/v1` |
 
 ## Próximos passos
 

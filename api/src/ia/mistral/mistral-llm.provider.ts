@@ -14,12 +14,11 @@ interface RespostaChat {
 export class MistralLlmProvider extends LlmProvider {
   readonly nome = 'mistral';
   private readonly modelo: string;
+  private readonly cliente: MistralClient;
 
-  constructor(
-    private readonly cliente: MistralClient,
-    config: ConfigService,
-  ) {
+  constructor(config: ConfigService) {
     super();
+    this.cliente = MistralClient.compartilhado(config);
     this.modelo = config.get<string>('MISTRAL_LLM_MODEL') || 'mistral-small-latest';
   }
 

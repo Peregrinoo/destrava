@@ -11,12 +11,11 @@ interface RespostaOcr {
 export class MistralOcrProvider extends OcrProvider {
   readonly nome = 'mistral';
   private readonly modelo: string;
+  private readonly cliente: MistralClient;
 
-  constructor(
-    private readonly cliente: MistralClient,
-    config: ConfigService,
-  ) {
+  constructor(config: ConfigService) {
     super();
+    this.cliente = MistralClient.compartilhado(config);
     this.modelo = config.get<string>('MISTRAL_OCR_MODEL') || 'mistral-ocr-latest';
   }
 

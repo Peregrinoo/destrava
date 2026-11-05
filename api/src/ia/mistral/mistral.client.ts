@@ -1,24 +1,26 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ErroProvedorIA } from '../ia.types';
 
 const TENTATIVAS = 3;
 
-@Injectable()
 export class MistralClient {
+  private static instancia: MistralClient | undefined;
+
+  static compartilhado(config: ConfigService): MistralClient {
+    MistralClient.instancia ??= new MistralClient(config);
+    return MistralClient.instancia;
+  }
+
   private readonly urlBase: string;
   private readonly chave: string | undefined;
 
-  constructor(config: ConfigService) {
+  private constructor(config: ConfigService) {
     this.urlBase = (config.get<string>('MISTRAL_BASE_URL') || 'https://api.mistral.ai/v1').replace(/\/+$/, '');
     this.chave = config.get<string>('MISTRAL_API_KEY') || undefined;
     if (!this.chave) {
       new Logger(MistralClient.name).warn('MISTRAL_API_KEY não configurada: os editais vão falhar ao processar.');
     }
-  }
-
-  get configurado(): boolean {
-    return Boolean(this.chave);
   }
 
   async post<T>(caminho: string, corpo: unknown, timeoutMs: number): Promise<T> {
