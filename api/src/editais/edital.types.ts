@@ -22,6 +22,7 @@ export interface ItemSecao {
 }
 
 export interface Secao {
+  id: string;
   pergunta: string;
   bloco: TipoBloco;
   icone?: string | null;
@@ -34,8 +35,8 @@ export interface ConteudoEdital {
   destaques: string[];
   exige_acao: boolean;
   proximo_passo?: { acao: string; link?: string | null; prazo?: string | null } | null;
-  datas: { evento: string; data?: string | null; hora?: string | null; fonte?: Fonte | null }[];
-  atencao: { alerta: string; gravidade: 'alta' | 'media'; fonte?: Fonte | null }[];
+  datas: { id: string; evento: string; data?: string | null; hora?: string | null; fonte?: Fonte | null }[];
+  atencao: { id: string; alerta: string; gravidade: 'alta' | 'media'; fonte?: Fonte | null }[];
   nao_informado: string[];
   contato?: { email?: string | null; site?: string | null } | null;
   secoes: Secao[];

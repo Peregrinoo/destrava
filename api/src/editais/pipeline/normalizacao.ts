@@ -64,7 +64,7 @@ export function normalizarConteudo(entrada: unknown, nomeArquivo: string | null)
 
   const secoes: Secao[] = lista(bruto.secoes)
     .map(objeto)
-    .map((secao, i): Secao | null => {
+    .map((secao, i): Omit<Secao, 'id'> | null => {
       const pergunta = texto(secao.pergunta);
       const itens: ItemSecao[] = lista(secao.itens)
         .map(objeto)
@@ -89,8 +89,9 @@ export function normalizarConteudo(entrada: unknown, nomeArquivo: string | null)
         itens,
       };
     })
-    .filter((secao): secao is Secao => secao !== null)
-    .slice(0, 7);
+    .filter((secao): secao is Omit<Secao, 'id'> => secao !== null)
+    .slice(0, 7)
+    .map((secao, i) => ({ id: `s${i + 1}`, ...secao }));
 
   return {
     documento: {
@@ -107,7 +108,9 @@ export function normalizarConteudo(entrada: unknown, nomeArquivo: string | null)
       .map(objeto)
       .map((item) => ({ evento: texto(item.evento), data: data(item.data), hora: hora(item.hora), fonte: fonte(item.fonte) }))
       .filter((item): item is typeof item & { evento: string } => item.evento !== null)
-      .sort((a, b) => (a.data ?? '9999').localeCompare(b.data ?? '9999')),
+      .filter((item, i, todas) => todas.findIndex((outra) => outra.evento === item.evento && outra.data === item.data) === i)
+      .sort((a, b) => (a.data ?? '9999').localeCompare(b.data ?? '9999'))
+      .map((item, i) => ({ id: `d${i + 1}`, ...item })),
     atencao: lista(bruto.atencao)
       .map(objeto)
       .map((item) => ({
@@ -115,7 +118,8 @@ export function normalizarConteudo(entrada: unknown, nomeArquivo: string | null)
         gravidade: umDe(item.gravidade, ['alta', 'media'] as const, 'media'),
         fonte: fonte(item.fonte),
       }))
-      .filter((item): item is typeof item & { alerta: string } => item.alerta !== null),
+      .filter((item): item is typeof item & { alerta: string } => item.alerta !== null)
+      .map((item, i) => ({ id: `a${i + 1}`, ...item })),
     nao_informado: lista(bruto.nao_informado).map(texto).filter((n): n is string => n !== null),
     contato: contatoEmail || contatoSite ? { email: contatoEmail, site: contatoSite } : null,
     secoes,
