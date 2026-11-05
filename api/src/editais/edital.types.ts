@@ -47,4 +47,5 @@ export interface Edital {
   nome_arquivo: string | null;
   criado_em: string;
   conteudo: ConteudoEdital | null;
+  erro: string | null;
 }
